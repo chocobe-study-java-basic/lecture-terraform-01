@@ -160,10 +160,33 @@ resource "aws_iam_instance_profile" "instance_profile_1" {
   role = aws_iam_role.ec2_role_1.name
 }
 
+locals {
+  ec2_user_data_base = <<-END_OF_FILE
+#!/bin/bash
+yum install docker -y
+systemctl enable docker
+systemctl start docker
+
+yum install git -y
+
+sudo dd if=/dev/zero of=/swapfile bs=128M count=32
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+sudo sh -c 'echo "/swapfile swap swap defaults 0 0" >> /etc/fstab'
+
+END_OF_FILE
+}
+
+data "aws_ssm_parameter" "amazon_linux_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 # EC2 인스턴스 생성
 resource "aws_instance" "ec2_1" {
   # 사용할 AMI ID
-  ami = "ami-062cddb9d94dcf95d"
+  # ami = "ami-062cddb9d94dcf95d"
+  ami = data.aws_ssm_parameter.amazon_linux_ami.value
   # EC2 인스턴스 유형
   instance_type = "t3.micro"
   # 사용할 서브넷 ID
@@ -180,12 +203,22 @@ resource "aws_instance" "ec2_1" {
   tags = {
     Name = "${var.prefix}-ec2-1"
   }
+
+  # 루트 볼륨 설정
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 12 # 볼륨 크기를 12GB로 설정
+  }
+
+  user_data = <<-EOF
+${local.ec2_user_data_base}
+EOF
 }
 
 # EC2 인스턴스 생성
 resource "aws_instance" "ec2_2" {
   # 사용할 AMI ID
-  ami = "ami-062cddb9d94dcf95d"
+  ami = data.aws_ssm_parameter.amazon_linux_ami.value
   # EC2 인스턴스 유형
   instance_type = "t3.micro"
   # 사용할 서브넷 ID
@@ -202,4 +235,14 @@ resource "aws_instance" "ec2_2" {
   tags = {
     Name = "${var.prefix}-ec2-2"
   }
+
+  # 루트 볼륨 설정
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 12 # 볼륨 크기를 12GB로 설정
+  }
+
+  user_data = <<-EOF
+${local.ec2_user_data_base}
+EOF
 }
